@@ -1,0 +1,104 @@
+public class CrawlerDemo
+{
+  	public void Run()
+    {
+      var url = "http://localhost/test";
+      var crawler = new Crawler(url);
+      crawler.Crawl();
+    }
+}
+
+public class Crawler
+{
+    protected static readonly Regex REGEX_FILENAME = new Regex(@"[^a-zA-Z0-9_-]+");
+ 
+    public Dictionary<string, string> Files { get; protected set; }
+    public string Url { get; set; }
+    public string BaseUrl
+    {
+        get { return this.Url.EndsWith("/") ? this.Url : this.Url + "/";  }
+    }
+  
+    public void Crawler()
+    {
+        Files.Clear();
+        CrawlUrl(new HtmlWeb(), this.Url);
+    }
+  	
+  	protected void CrawlUrl(HtmlWeb web, string url)
+    {
+        // only crawl each url once
+        if (!IsUrlCrawled(url))
+        {
+            if (SavePage(url))
+            {
+                CrawlLinks(web, url);
+            }
+        }
+    }
+  
+  	protected void CrawlLinks(HtmlWeb web, string url)
+    {
+        // get all links
+        var doc = web.Load(url);
+        var links = doc.DocumentNode.SelectNodes("//a[@href]");
+
+        if (links != null)
+        {
+            foreach (var link in links)
+            {
+                var href = link.GetAttributeValue("href", string.Empty);
+
+                // avoid anchors
+                if (!string.IsNullOrWhiteSpace(href)
+                    && !href.StartsWith("#"))
+                {
+                    // build absolute uri
+                    var absoluteUri = GetAbsoluteUrl(href);
+
+                    // only crawl links from the base URL
+                    if (absoluteUri.Contains(this.Url))
+                    {
+                        CrawlUrl(web, absoluteUri);
+                    }
+                }
+            }
+        }
+    }
+  
+  	protected bool SavePage(string url)
+    {
+        using (var client = new WebClient())
+        {
+            try
+            {
+                var html = client.DownloadString(url);
+                var contentType = client.ResponseHeaders["content-type"];
+
+                // only crawl html files
+                if (!string.IsNullOrWhiteSpace(contentType)
+                    && contentType.Equals("text/html"))
+                {
+                    var filename = BuildFilename(url);
+                    CreateFile(filename, html);
+                    Files.Add(url, filename);
+                }
+                else
+                {
+                    return false;
+                }
+            }
+            catch (WebException)
+            {
+                return false;
+            }
+          
+        }
+
+        return true;
+    }
+  
+		protected string BuildFilename(string url)  { ... }	
+		protected void CreateFile(string fileName,  string html)  { ... }	
+}
+
